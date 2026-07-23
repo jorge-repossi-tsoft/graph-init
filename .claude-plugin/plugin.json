@@ -1,0 +1,18 @@
+{
+  "name": "graph-init",
+  "version": "3.0.0",
+  "description": "GRAPH pattern bootstrapper: sets up a versioned, hierarchical knowledge graph with human-review gates and autonomous-loop circuit breakers for any AI coding agent project. Stack-agnostic, greenfield or brownfield (--migrate). Ships its own built-in code indexer — no third-party tool required.",
+  "author": {
+    "name": "SudacaDev"
+  },
+  "homepage": "https://github.com/SudacaDev/graph-init",
+  "repository": "https://github.com/SudacaDev/graph-init",
+  "license": "MIT",
+  "keywords": ["graph", "agentic-architecture", "knowledge-graph", "circuit-breaker", "human-review", "design-pattern"],
+  "components": {
+    "skills": ["skills/graph"],
+    "commands": ["commands/graph-init.md"],
+    "hooks": "hooks/hooks.json"
+  }
+}
+
