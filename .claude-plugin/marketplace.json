@@ -1,7 +1,7 @@
 {
   "name": "graph-init",
   "owner": {
-    "name": "SudacaDev"
+    "name": "jorge-repossi-tsoft"
   },
   "metadata": {
     "description": "GRAPH — a design pattern for agentic architectures (Grounded, Reviewable, Agnostic, Persistent, Hierarchical), installable as a Claude Code plugin."

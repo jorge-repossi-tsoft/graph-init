@@ -14,7 +14,7 @@ GRAPH está en el [README](./README.md), y una vez instalado en
 ## 1. Agregar el marketplace
 
 ```
-/plugin marketplace add SudacaDev/graph-init
+/plugin marketplace add jorge-repossi-tsoft/graph-init
 ```
 
 (o la URL completa del repo, si tu versión de Claude Code lo pide así)
