@@ -71,6 +71,45 @@ depender de nada externo) y reconcilia el historial de git.
 
 Nunca pisa archivos que ya existan — si algo ya está, lo salta y te avisa.
 
+## Alternativa: sin Claude Code ni Antigravity (Codex, u otra herramienta)
+
+Codex (y cualquier herramienta sin sistema de plugins propio) no puede
+correr `/plugin marketplace add` — eso es específico de Claude Code. Pero el
+resultado de graph-init (el árbol `.agents/graph/` + `AGENTS.md`) es
+agnóstico: cualquier herramienta que lea `AGENTS.md` lo aprovecha igual una
+vez que existe en el repo.
+
+Para generarlo sin pasar por ningún plugin:
+
+1. Cloná este repo en cualquier lado (no hace falta que sea junto al
+   proyecto que vas a inicializar):
+
+```bash
+git clone https://github.com/jorge-repossi-tsoft/graph-init.git
+```
+
+1. Parado en la raíz de tu proyecto, corré el bootstrapper standalone
+   (mismo contrato que el comando de plugin — nunca pisa archivos
+   existentes, corre el indexador real en brownfield, etc.):
+
+```bash
+python3 /ruta/a/graph-init/scripts/graph-init.py . --mode=greenfield
+```
+
+o
+
+```bash
+python3 /ruta/a/graph-init/scripts/graph-init.py . --mode=brownfield --migrate
+```
+
+1. Abrí el proyecto con Codex (o la herramienta que uses) normalmente —
+   va a leer `AGENTS.md` como cualquier otro.
+
+**Límite honesto:** el circuit breaker (`enforcement/`) solo se activa
+solo con el plugin de Claude Code. Corrido standalone, queda declarativo
+únicamente — ver `.agents/graph/enforcement/README.md` para agregar un
+adaptador a tu herramienta si necesitás que bloquee de verdad.
+
 ## Si algo no anda
 
 - El comando no aparece → el reload no tomó el plugin, repetí el paso 3.
