@@ -257,9 +257,10 @@ def print_summary(mode, migrate, root, report):
             log(f"  migración omitida (ya existe destino): {old} / {new} — ambos quedaron intactos")
     if report["folders_created"]:
         log(f"  carpetas nuevas: {len(report['folders_created'])}")
-    log(f"  archivos creados: {len(report['created'])}")
-    for f in report["created"]:
-        log(f"    + {f}")
+    if report["created"]:
+        log(f"  archivos creados: {len(report['created'])}")
+        for f in report["created"]:
+            log(f"    + {f}")
     if report["skipped"]:
         log(f"  archivos ya existentes, no tocados: {len(report['skipped'])}")
         for f in report["skipped"]:
@@ -270,31 +271,102 @@ def print_summary(mode, migrate, root, report):
         log(f"  bridge agregado (append) a: {f}")
     for f in report["bridges_skipped"]:
         log(f"  bridge ya presente, no tocado: {f}")
-    if mode == "brownfield":
-        if report.get("index_stats"):
-            s = report["index_stats"]
-            log(f"  indexación: {s['nodes']} nodos, {s['edges']} edges, {s['communities']} comunidades")
-        elif report.get("index_skipped"):
-            log("  indexación: index.json ya existía, no se re-indexó")
-        gr = report.get("git_reconciled")
-        if isinstance(gr, int):
-            log(f"  historial git reconciliado: {gr} commits marcados origen: pre-graph")
-        elif gr == "no-git-repo":
-            log("  historial git: no se encontró .git en la raíz, se omitió la reconciliación")
-        elif gr == "already":
-            log("  historial git: ya estaba reconciliado (pre-graph-commits.md existente)")
+    if report.get("index_stats"):
+        s = report["index_stats"]
+        log(f"  indexación: {s['nodes']} nodos, {s['edges']} edges, {s['communities']} comunidades")
+    elif report.get("index_skipped"):
+        log("  indexación: index.json ya existía, no se re-indexó (usá --reindex para forzarlo)")
+    gr = report.get("git_reconciled")
+    if isinstance(gr, int):
+        log(f"  historial git reconciliado: {gr} commits marcados origen: pre-graph")
+    elif gr == "no-git-repo":
+        log("  historial git: no se encontró .git en la raíz, se omitió la reconciliación")
+    elif gr == "already":
+        log("  historial git: ya estaba reconciliado (pre-graph-commits.md existente)")
+    if report["docs_updated"]:
+        log(f"  documentación actualizada: {len(report['docs_updated'])}")
+        for f in report["docs_updated"]:
+            log(f"    ~ {f}")
+        for f in report["docs_backed_up"]:
+            log(f"    (backup guardado en {f})")
     log()
     log("Nota: los 3 hooks de enforcement (circuit breaker) solo se activan solos")
-    log("cuando GRAPH se instala como plugin de Claude Code. Corriendo standalone,")
-    log("Circuit Breaker queda declarativo únicamente — ver")
+    log("cuando GRAPH se instala como plugin de Claude Code o Codex CLI. Corriendo")
+    log("standalone, Circuit Breaker queda declarativo únicamente — ver")
     log(".agents/graph/enforcement/README.md para agregar un adaptador a tu herramienta.")
+
+
+def reindex_only(root, report):
+    """Vuelve a correr el indexador y la reconciliación de git aunque
+    knowledge/index.json ya exista. No toca templates ni config — solo
+    knowledge/ y history/."""
+    if not os.path.isdir(os.path.join(root, ".agents", "graph")):
+        log("No hay .agents/graph/ en este repo — corré graph-init.py con --mode primero.")
+        sys.exit(1)
+
+    build_graph = os.path.join(SCRIPT_DIR, "build-graph.py")
+    result = subprocess.run([sys.executable, build_graph, root], capture_output=True, text=True)
+    if result.returncode != 0:
+        log("El indexador (build-graph.py) falló:")
+        log(result.stderr)
+        sys.exit(1)
+    report["index_stats"] = json.loads(result.stdout.strip().splitlines()[-1])
+    report["index_skipped"] = False
+
+    # La reconciliación de git usa su propio marcador de "ya hecho"
+    # (pre-graph-commits.md) — si querés forzarla de nuevo, borrá ese
+    # archivo antes de correr --reindex.
+    reconcile_git_history(root, report)
+
+
+# Solo documentación del patrón — nunca config ni datos de sesión del usuario.
+DOC_ONLY_MAP = [
+    ("graph/GRAPH.md", ".agents/graph/GRAPH.md"),
+    ("graph/README.md", ".agents/graph/README.md"),
+    ("roles/planner.md", ".agents/roles/planner.md"),
+    ("roles/executor.md", ".agents/roles/executor.md"),
+    ("roles/reviewer.md", ".agents/roles/reviewer.md"),
+]
+
+
+def update_docs(root, report):
+    """Sobreescribe SOLO la documentación genérica del patrón (GRAPH.md,
+    graph/README.md, roles/*.md) con la versión actual del plugin. Hace
+    un .bak del archivo viejo antes de tocarlo. Deliberadamente NO toca:
+    circuit-breaker.yml, gates/policy.yml, roles/registry.yml (puede tener
+    roles custom), progress.md, tasks.md — esos son estado o config del
+    proyecto, no documentación genérica del patrón."""
+    if not os.path.isdir(os.path.join(root, ".agents", "graph")):
+        log("No hay .agents/graph/ en este repo — corré graph-init.py con --mode primero.")
+        sys.exit(1)
+
+    for rel_src, rel_dst in DOC_ONLY_MAP:
+        src = os.path.join(TEMPLATES_DIR, *rel_src.split("/"))
+        dst = os.path.join(root, *rel_dst.split("/"))
+        if not os.path.isfile(src):
+            continue
+        if os.path.isfile(dst):
+            with open(src, "rb") as f1, open(dst, "rb") as f2:
+                if f1.read() == f2.read():
+                    continue  # ya está igual, no hace falta ni backup
+            bak_path = dst + ".bak"
+            shutil.copyfile(dst, bak_path)
+            report["docs_backed_up"].append(bak_path)
+        shutil.copyfile(src, dst)
+        report["docs_updated"].append(dst)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Bootstrap standalone del patrón GRAPH (sin plugin system).")
     parser.add_argument("repo_root", nargs="?", default=".", help="raíz del proyecto donde instalar GRAPH")
-    parser.add_argument("--mode", choices=["greenfield", "brownfield"], required=True)
+    parser.add_argument("--mode", choices=["greenfield", "brownfield"], help="requerido salvo con --reindex/--update-docs solos")
     parser.add_argument("--migrate", action="store_true")
+    parser.add_argument("--reindex", action="store_true",
+                         help="Vuelve a correr build-graph.py y reconciliar git, aunque knowledge/index.json ya exista. No toca nada más.")
+    parser.add_argument("--update-docs", action="store_true",
+                         help="Sobreescribe GRAPH.md, graph/README.md y roles/*.md con la versión actual del plugin "
+                              "(hace .bak del archivo viejo antes). NUNCA toca circuit-breaker.yml, gates/policy.yml, "
+                              "progress.md ni tasks.md — esos son tuyos.")
     args = parser.parse_args()
 
     root = os.path.abspath(args.repo_root)
@@ -306,7 +378,23 @@ def main():
         "created": [], "skipped": [], "migrated": [], "migration_skipped": [],
         "folders_created": [], "bridges_created": [], "bridges_appended": [], "bridges_skipped": [],
         "index_stats": None, "index_skipped": False, "git_reconciled": None,
+        "docs_updated": [], "docs_backed_up": [],
     }
+
+    # --reindex y --update-docs pueden correr solos, sin --mode, sobre un
+    # proyecto que ya tiene GRAPH instalado.
+    if args.reindex and not args.mode:
+        reindex_only(root, report)
+        print_summary("reindex-only", False, root, report)
+        return
+    if args.update_docs and not args.mode:
+        update_docs(root, report)
+        print_summary("update-docs-only", False, root, report)
+        return
+
+    if not args.mode:
+        log("Falta --mode=greenfield o --mode=brownfield (o usá --reindex / --update-docs solo).")
+        sys.exit(1)
 
     if args.migrate:
         do_migration(root, report)
@@ -320,6 +408,11 @@ def main():
     place_bridge(root, "CLAUDE.md", report, legacy_exists)
 
     stamp_mode(root, args.mode, report)
+
+    if args.reindex:
+        reindex_only(root, report)
+    if args.update_docs:
+        update_docs(root, report)
 
     print_summary(args.mode, args.migrate, root, report)
 
