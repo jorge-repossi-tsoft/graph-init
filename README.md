@@ -8,7 +8,8 @@ Si le das autonomía a un agente de IA sobre tu proyecto, en algún momento va
 a: inventar contexto que no tiene, aplicar cambios grandes sin que nadie los
 revise, quedarse en un loop repitiendo lo mismo, u olvidarse todo entre una
 sesión y la otra. GRAPH es un conjunto de 5 reglas + un mecanismo de freno
-para que eso no pase — instalable en cualquier proyecto en un comando.
+para que eso no pase — instalable en cualquier proyecto en un comando, como
+plugin nativo de **Claude Code** o de **Codex CLI**.
 
 ## Instalación
 

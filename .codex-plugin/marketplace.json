@@ -1,0 +1,20 @@
+{
+  "name": "graph-init",
+  "interface": {
+    "displayName": "GRAPH — agentic architecture pattern"
+  },
+  "plugins": [
+    {
+      "name": "graph-init",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_FIRST_USE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
