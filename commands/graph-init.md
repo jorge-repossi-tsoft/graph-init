@@ -6,9 +6,26 @@ argument-hint: "--mode=greenfield|brownfield [--migrate]"
 You are bootstrapping the GRAPH design pattern into the current project.
 Arguments received: $ARGUMENTS
 
-Parse `--mode=` (must be `greenfield` or `brownfield` — if missing or invalid,
-stop and ask the user which one applies; do not guess) and `--migrate`
-(boolean flag, absent by default).
+Parse `--mode=` (must be `greenfield` or `brownfield`), `--migrate`
+(boolean, absent by default), `--reindex` (boolean, absent by default),
+and `--update-docs` (boolean, absent by default).
+
+**Two entry points:**
+
+- **Fresh install or re-run of the full flow:** `--mode=` is required. If
+  missing or invalid, stop and ask the user which one applies; do not
+  guess. Follow Steps 0 through 6 below. If `--reindex` and/or
+  `--update-docs` were also passed, run them as extra steps at the end
+  (Step 7 / Step 8), even though Step 2 already indexes on a fresh
+  brownfield install — `--reindex` forces it again even if
+  `knowledge/index.json` already existed and Step 2 would otherwise have
+  skipped it.
+- **`--reindex` and/or `--update-docs` passed WITHOUT `--mode`:** this
+  means the user already has GRAPH installed in this project and just
+  wants to refresh something. Skip straight to Step 7 / Step 8 — don't run
+  Steps 0-6, don't ask for `--mode`. If `.agents/graph/` doesn't exist yet
+  in this case, stop and tell the user to run a full install first (with
+  `--mode=`).
 
 ## Core rule for the whole command: never overwrite
 
@@ -139,6 +156,46 @@ detectado: <actual mode>`. If it came from migration, don't touch it.
   is a heuristic, not full AST parsing — some references (dynamic imports,
   unusual syntax, non-relative aliases) may not resolve, and that's a known
   limitation to note in `sessions/progress.md`, not something to hide.
+
+### 7. `--reindex` (runs if this flag was passed, standalone or combined with a fresh install)
+
+Re-run the built-in indexer even if `knowledge/index.json` already exists
+— useful when the project had no code yet at install time (greenfield) and
+real code got added afterward, or when the codebase changed enough that
+the existing index is stale:
+
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build-graph.py <repo_root>`
+
+This always overwrites `knowledge/nodes/`, `knowledge/communities/`, and
+`knowledge/index.json` — there's nothing to preserve there, it's derived
+data, not something the user hand-edits. Report the new real counts.
+Also re-run git history reconciliation (same as Step 2.3) unless
+`.agents/graph/history/pre-graph-commits.md` already exists (that marker
+means it was already done — `--reindex` only forces the *code* index, not
+git history, to avoid duplicating entries).
+
+### 8. `--update-docs` (runs if this flag was passed, standalone or combined with a fresh install)
+
+Refreshes ONLY the generic pattern documentation to the version that ships
+with this plugin — never config, never user data:
+
+- `templates/graph/GRAPH.md` → `.agents/graph/GRAPH.md`
+- `templates/graph/README.md` → `.agents/graph/README.md`
+- `templates/roles/planner.md`, `executor.md`, `reviewer.md` → `.agents/roles/`
+
+For each: if the destination file's content differs from the template,
+copy the destination to `<file>.bak` first (so nothing is silently lost),
+then overwrite it. If content is already identical, skip silently — no
+need for a backup of something that wasn't going to change.
+
+**Never** touch with this flag: `circuit-breaker.yml`, `gates/policy.yml`,
+`roles/registry.yml` (may have project-specific role tweaks),
+`sessions/progress.md`, `sessions/tasks.md`. Those are either protected
+config (need the gate/approval flow to edit) or the user's own project
+state — a docs refresh has no business touching either.
+
+Report which files were updated and which `.bak` files were created, if
+any.
 
 Never invent node/edge/community counts — compute them from what actually
 ran, or state plainly that they're not available yet.
